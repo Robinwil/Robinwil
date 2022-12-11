@@ -1,5 +1,5 @@
 - 👋 Hi, I’m @Robinwil
-- 👀 I’m interested in ... games and ransom cool shit
+- 👀 
 - 🌱 I’m currently learning ... 
 - 💞️ I’m looking to collaborate on ... nothing but you can try me
 - 📫 How to reach me ... robin.wilhelmsen@me.com
