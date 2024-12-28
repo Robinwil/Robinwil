@@ -23,6 +23,8 @@ A collaborative library project built with Nuxt and Vue. Currently under develop
 ### [The Big Grimoire](https://the-big-grimoire.vercel.app/)
 A fantasy wiki cataloguing magic items and mysterious creatures. Built with Svelte, Bulma CSS, and featuring immersive design and illustrations. Project is not yet finished, with the front page and some navigation available.
 
+### [Havbank.net](Http://havbank.net/)
+
 ## Skills
 
 - Programming Languages: Python, HTML, CSS, PHP, SQL
