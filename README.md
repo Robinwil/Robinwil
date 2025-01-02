@@ -14,16 +14,28 @@ I'm passionate about using technology to improve efficiency, both in my personal
 
 ## Projects
 
-### [robinwil.com](https://robinwil.com)
+## [robinwil.com](https://robinwil.com)
 My personal website built with modern web technologies.
 
-### [forestofsecrets.com](https://forestofsecrets.com)
+## [forestofsecrets.com](https://forestofsecrets.com)
 A collaborative library project built with Nuxt and Vue. Currently under development with only a front page available. (as of May 2024)
 
-### [The Big Grimoire](https://the-big-grimoire.vercel.app/)
+## [The Big Grimoire](https://the-big-grimoire.vercel.app/)
 A fantasy wiki cataloguing magic items and mysterious creatures. Built with Svelte, Bulma CSS, and featuring immersive design and illustrations. Project is not yet finished, with the front page and some navigation available.
 
-### [Havbank.net](Http://havbank.net/)
+## [Havbank.net](https://havbank.net/)
+
+A modern banking website demo showcasing enterprise-level web development practices. Key features include:
+
+- **Frontend Architecture**: Built with SvelteKit and Tailwind CSS for optimal performance
+- **Technical Excellence**:
+  - Server-side rendering (SSR) for enhanced performance
+  - Responsive design with dark/light mode theming
+  - GDPR-compliant data handling patterns
+  - Comprehensive error handling and logging
+  - Accessibility (WCAG 2.1) compliance
+
+**Tech Stack**: SvelteKit, Javascript, Tailwind CSS
 
 ## Skills
 
