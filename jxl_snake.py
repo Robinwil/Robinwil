@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build a tiny native JPEG XL artwork: a frontal snake head.
+"""Build a tiny native JPEG XL artwork: a frontal scaled snake head.
 
 No raster image is encoded. A zero-residual Modular tree generates the head
-silhouette and its vertical colour field. Native JPEG XL splines add two eyes,
-scale rows, facial anatomy and a low-cost chaotic background.
+silhouette and green vertical colour field. Native JPEG XL splines add two eyes,
+interlocking scales, facial anatomy and a chaotic spectral background.
 """
 
 from pathlib import Path
@@ -27,13 +27,13 @@ def spline(rgb, sigma, pts, harmonics=None, sigma_h=None):
     return f"Spline {coeff} {points} EndSpline"
 
 
-def zigzag(y, x0, x1, step=20, amp=6, phase=0):
-    """One continuous interlocking scale row."""
-    pts, x, high = [], x0, phase & 1
-    while x <= x1:
-        pts.append((x, y - amp if high else y + amp))
-        x += step // 2
-        high ^= 1
+def scallops(y, x0, x1, step=22, amp=7, phase=0):
+    """Repeated V-shaped scale boundaries on a common baseline."""
+    pts = []
+    x = x0 + (step // 2 if phase else 0)
+    while x + step <= x1:
+        pts.extend(((x, y), (x + step // 2, y + amp), (x + step, y)))
+        x += step
     return tuple(pts)
 
 
@@ -56,130 +56,147 @@ def band_tree(bands, i=0, indent="") -> str:
         return leaf(0, indent)
     y0, x0, x1, value = bands[i]
     branch = leaf(0, indent + "  ") if not value else x_range(x0, x1, value, indent + "  ")
-    return "\n".join([
+    return "\n".join((
         f"{indent}if y > {y0}",
         branch,
         band_tree(bands, i + 1, indent + "  "),
-    ])
+    ))
 
 
-# A front-facing viper head: broad temples, then a tapered muzzle.
+# Broad temples around the eyes, then a narrow muzzle and chin.
 HEAD_BANDS = (
-    (382, 0, 0, 0),
-    (370, 205, 307, 42),
-    (358, 180, 332, 48),
-    (346, 158, 354, 54),
-    (334, 137, 375, 60),
-    (322, 120, 392, 66),
-    (310, 105, 407, 72),
-    (298, 92, 420, 78),
-    (286, 82, 430, 84),
-    (274, 76, 436, 88),
-    (262, 72, 440, 92),
-    (250, 76, 436, 94),
-    (238, 84, 428, 92),
-    (226, 98, 414, 88),
-    (214, 116, 396, 80),
-    (202, 142, 370, 70),
-    (190, 176, 336, 58),
-    (178, 214, 298, 46),
+    (384, 0, 0, 0),
+    (372, 228, 284, 42),
+    (360, 214, 298, 48),
+    (348, 198, 314, 54),
+    (336, 180, 332, 60),
+    (324, 160, 352, 68),
+    (312, 140, 372, 74),
+    (300, 120, 392, 80),
+    (288, 102, 410, 86),
+    (276, 84, 428, 92),
+    (264, 70, 442, 98),
+    (252, 62, 450, 104),
+    (240, 58, 454, 108),
+    (228, 64, 448, 106),
+    (216, 78, 434, 100),
+    (204, 100, 412, 90),
+    (192, 132, 380, 76),
+    (180, 172, 340, 60),
+    (168, 216, 296, 46),
 )
 
 SCALE_ROWS = (
-    (199, 196, 316, 0, 5),
-    (217, 155, 357, 1, 6),
-    (235, 122, 390, 0, 6),
-    (253, 101, 411, 1, 7),
-    (271, 91, 421, 0, 7),
-    (289, 96, 416, 1, 7),
-    (307, 112, 400, 0, 6),
-    (325, 139, 373, 1, 6),
-    (343, 176, 336, 0, 5),
+    (187, 194, 318, 22, 5, 0),
+    (205, 154, 358, 22, 6, 1),
+    (223, 118, 394, 22, 6, 0),
+    (241, 88, 424, 22, 7, 1),
+    (259, 74, 438, 22, 8, 0),
+    (277, 82, 430, 22, 8, 1),
+    (295, 102, 410, 22, 7, 0),
+    (313, 130, 382, 22, 7, 1),
+    (331, 166, 346, 22, 6, 0),
+    (349, 202, 310, 22, 5, 1),
 )
 
-# Edge and face paths.
-TOP_EDGE = ((177, 191), (220, 174), (256, 169), (292, 174), (335, 191))
-LEFT_BROW = ((127, 241), (166, 220), (211, 224))
-RIGHT_BROW = ((301, 224), (346, 220), (385, 241))
-LEFT_EYE = ((132, 251), (170, 235), (211, 251))
-RIGHT_EYE = ((301, 251), (342, 235), (380, 251))
-LEFT_PUPIL = ((171, 235), (171, 258))
-RIGHT_PUPIL = ((341, 235), (341, 258))
-NOSE_RIDGE = ((256, 225), (256, 286), (256, 322))
-LEFT_NOSTRIL = ((225, 318), (234, 316))
-RIGHT_NOSTRIL = ((278, 316), (287, 318))
-MOUTH = ((186, 346), (227, 354), (256, 356), (285, 354), (326, 346))
-CHIN = ((218, 371), (256, 377), (294, 371))
+TOP_EDGE = ((169, 181), (214, 161), (256, 156), (298, 161), (343, 181))
+LEFT_EDGE = ((169, 181), (105, 205), (61, 239), (72, 276), (116, 307), (180, 336))
+RIGHT_EDGE = tuple((512 - x, y) for x, y in LEFT_EDGE)
 
-# Thin background paths: high visual variation for low spline area.
+LEFT_EYE_TOP = ((107, 236), (151, 211), (207, 229))
+LEFT_EYE_LOW = ((107, 236), (154, 252), (207, 229))
+RIGHT_EYE_TOP = tuple((512 - x, y) for x, y in LEFT_EYE_TOP)
+RIGHT_EYE_LOW = tuple((512 - x, y) for x, y in LEFT_EYE_LOW)
+LEFT_PUPIL = ((157, 219), (157, 247))
+RIGHT_PUPIL = ((355, 219), (355, 247))
+LEFT_EYE_GLINT = ((151, 224), (155, 222))
+RIGHT_EYE_GLINT = ((357, 222), (361, 224))
+
+NOSE_RIDGE = ((256, 213), (256, 276), (256, 322))
+LEFT_NOSTRIL = ((224, 318), (234, 315))
+RIGHT_NOSTRIL = tuple((512 - x, y) for x, y in LEFT_NOSTRIL)
+MOUTH = ((190, 345), (225, 354), (256, 357), (287, 354), (322, 345))
+CHIN = ((222, 371), (256, 378), (290, 371))
+
+# Background paths combine smooth waves with angular nested repetitions.
 BG_PATHS = (
-    ((12, 92), (92, 42), (184, 75), (270, 36), (368, 73), (500, 32)),
-    ((4, 140), (86, 116), (154, 144), (240, 100), (334, 136), (506, 92)),
-    ((8, 432), (98, 390), (188, 430), (278, 394), (376, 435), (505, 390)),
-    ((25, 476), (116, 450), (205, 479), (305, 444), (399, 480), (492, 447)),
-    ((35, 45), (18, 170), (47, 274), (20, 380), (52, 500)),
-    ((476, 18), (493, 139), (466, 264), (494, 386), (470, 505)),
+    ((8, 76), (72, 34), (136, 82), (200, 42), (264, 80), (328, 36), (392, 76), (504, 28)),
+    ((5, 126), (70, 104), (135, 140), (205, 96), (276, 136), (350, 102), (505, 82)),
+    ((8, 430), (72, 384), (140, 434), (208, 390), (278, 432), (350, 388), (504, 430)),
+    ((18, 480), (88, 448), (154, 486), (224, 446), (296, 482), (372, 444), (496, 476)),
+    ((34, 24), (16, 98), (48, 164), (18, 234), (50, 306), (20, 382), (53, 500)),
+    ((478, 18), (496, 96), (465, 166), (495, 238), (463, 312), (494, 392), (468, 504)),
+    ((30, 58), (84, 94), (126, 54), (174, 100), (218, 62), (256, 108), (298, 62), (342, 100), (390, 54), (444, 94), (494, 58)),
+    ((28, 456), (80, 420), (126, 462), (174, 416), (216, 458), (256, 412), (298, 458), (340, 416), (388, 462), (438, 420), (494, 456)),
 )
 
 
 def modular_tree() -> str:
-    # Channel 0 is the luminance-like head field. RCT 0 then combines two cheap
-    # conditional channels with it, yielding a green/teal vertical gradient.
+    # RCT 0 stores G, R-G, B-G. Negative chroma deltas therefore produce a
+    # saturated green field whose brightness changes from forehead to muzzle.
     return "\n".join([
         "if c > 1",
         "  if PrevAbs > 0",
-        leaf(-24, "    "),
+        leaf(-18, "    "),
         leaf(0, "    "),
         "  if c > 0",
         "    if PrevAbs > 0",
-        leaf(38, "      "),
+        leaf(-34, "      "),
         leaf(0, "      "),
         band_tree(HEAD_BANDS, indent="    "),
     ])
 
 
 def program() -> str:
-    p = [f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3", "RCT 0"]
+    p = [
+        f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3", "RCT 0",
+        "Gaborish",
+    ]
 
-    # Chaotic spectral background. Sparse DCT harmonics vary colour along each
-    # line, making the six paths read as a much denser nebula/lattice.
-    bg_colours = [
+    bg_colours = (
         (0.04, 0.24, 0.34), (0.20, 0.05, 0.35), (0.02, 0.30, 0.18),
         (0.28, 0.06, 0.12), (0.05, 0.18, 0.30), (0.22, 0.04, 0.28),
-    ]
-    for i, path in enumerate(BG_PATHS):
-        p.append(spline(bg_colours[i], 0.32, path,
+        (0.05, 0.28, 0.24), (0.26, 0.05, 0.18),
+    )
+    for colour, path in zip(bg_colours, BG_PATHS):
+        p.append(spline(colour, 0.25, path,
                         harmonics={3: (0.08, -0.05, 0.09),
                                    7: (-0.06, 0.08, -0.04),
                                    15: (0.04, -0.03, 0.05)},
-                        sigma_h={5: 0.05, 11: -0.035}))
+                        sigma_h={5: 0.04, 11: -0.025}))
 
-    # Silhouette edges and repeated scale rows.
-    p.append(spline((-0.34, -0.42, -0.21), 0.62, TOP_EDGE))
-    for i, (y, x0, x1, phase, amp) in enumerate(SCALE_ROWS):
-        colour = (0.43, 0.68, 0.08) if i & 1 else (0.08, 0.44, 0.28)
-        p.append(spline(colour, 0.27, zigzag(y, x0, x1, amp=amp, phase=phase),
+    # Fine contour strokes conceal the staircase edges of the Modular mask.
+    p.append(spline((-0.36, -0.44, -0.22), 0.55, TOP_EDGE))
+    p.append(spline((-0.36, -0.44, -0.22), 0.55, LEFT_EDGE))
+    p.append(spline((-0.36, -0.44, -0.22), 0.55, RIGHT_EDGE))
+
+    # Interlocking V rows, alternating phase and hue.
+    for i, (y, x0, x1, step, amp, phase) in enumerate(SCALE_ROWS):
+        colour = (0.40, 0.68, 0.07) if i & 1 else (0.06, 0.46, 0.25)
+        p.append(spline(colour, 0.24, scallops(y, x0, x1, step, amp, phase),
                         harmonics={5: (0.055, 0.075, 0.018),
                                    10: (-0.035, -0.05, 0.014),
                                    20: (0.022, 0.032, -0.008)}))
 
-    # Two eyes and symmetric facial anatomy.
-    for brow in (LEFT_BROW, RIGHT_BROW):
-        p.append(spline((0.52, 0.82, 0.10), 0.85, brow,
-                        harmonics={4: (0.10, 0.13, 0.02)}))
-    for eye in (LEFT_EYE, RIGHT_EYE):
-        p.append(spline((-0.70, -0.78, -0.42), 1.85, eye))
-        p.append(spline((1.20, 0.92, 0.08), 1.02, eye,
-                        harmonics={3: (0.12, 0.04, -0.02)}))
+    # Almond eyes are made from two arcs each, then slit pupils and glints.
+    for top, low in ((LEFT_EYE_TOP, LEFT_EYE_LOW), (RIGHT_EYE_TOP, RIGHT_EYE_LOW)):
+        p.append(spline((-0.74, -0.82, -0.45), 1.45, top))
+        p.append(spline((-0.74, -0.82, -0.45), 1.45, low))
+        p.append(spline((1.18, 0.90, 0.07), 0.75, top,
+                        harmonics={3: (0.10, 0.03, -0.02)}))
+        p.append(spline((1.18, 0.90, 0.07), 0.75, low,
+                        harmonics={3: (0.10, 0.03, -0.02)}))
     for pupil in (LEFT_PUPIL, RIGHT_PUPIL):
-        p.append(spline((-1.10, -1.10, -0.78), 0.34, pupil))
+        p.append(spline((-1.12, -1.12, -0.80), 0.38, pupil))
+    p.append(spline((1.25, 1.05, 0.22), 0.24, LEFT_EYE_GLINT))
+    p.append(spline((1.25, 1.05, 0.22), 0.24, RIGHT_EYE_GLINT))
 
-    p.append(spline((0.18, 0.34, 0.05), 0.34, NOSE_RIDGE,
+    p.append(spline((0.15, 0.34, 0.05), 0.32, NOSE_RIDGE,
                     harmonics={4: (0.05, 0.08, 0.01)}))
-    p.append(spline((-0.94, -0.96, -0.74), 0.50, LEFT_NOSTRIL))
-    p.append(spline((-0.94, -0.96, -0.74), 0.50, RIGHT_NOSTRIL))
-    p.append(spline((-0.40, -0.48, -0.24), 0.42, MOUTH))
-    p.append(spline((0.16, 0.30, 0.04), 0.30, CHIN))
+    p.append(spline((-0.96, -0.98, -0.76), 0.52, LEFT_NOSTRIL))
+    p.append(spline((-0.96, -0.98, -0.76), 0.52, RIGHT_NOSTRIL))
+    p.append(spline((-0.42, -0.50, -0.25), 0.43, MOUTH))
+    p.append(spline((0.18, 0.32, 0.04), 0.30, CHIN))
 
     return "\n".join(p) + "\n\n" + modular_tree() + "\n"
 
