@@ -29,10 +29,10 @@ def spline(rgb, sigma, pts, harmonics=None, sigma_h=None):
 
 def scallops(y, x0, x1, step=22, amp=7, phase=0):
     """Repeated V-shaped scale boundaries on a common baseline."""
-    pts = []
     x = x0 + (step // 2 if phase else 0)
+    pts = [(x, y)]
     while x + step <= x1:
-        pts.extend(((x, y), (x + step // 2, y + amp), (x + step, y)))
+        pts.extend(((x + step // 2, y + amp), (x + step, y)))
         x += step
     return tuple(pts)
 
@@ -63,40 +63,22 @@ def band_tree(bands, i=0, indent="") -> str:
     ))
 
 
-# Broad temples around the eyes, then a narrow muzzle and chin.
 HEAD_BANDS = (
     (384, 0, 0, 0),
-    (372, 228, 284, 42),
-    (360, 214, 298, 48),
-    (348, 198, 314, 54),
-    (336, 180, 332, 60),
-    (324, 160, 352, 68),
-    (312, 140, 372, 74),
-    (300, 120, 392, 80),
-    (288, 102, 410, 86),
-    (276, 84, 428, 92),
-    (264, 70, 442, 98),
-    (252, 62, 450, 104),
-    (240, 58, 454, 108),
-    (228, 64, 448, 106),
-    (216, 78, 434, 100),
-    (204, 100, 412, 90),
-    (192, 132, 380, 76),
-    (180, 172, 340, 60),
-    (168, 216, 296, 46),
+    (372, 228, 284, 42), (360, 214, 298, 48), (348, 198, 314, 54),
+    (336, 180, 332, 60), (324, 160, 352, 68), (312, 140, 372, 74),
+    (300, 120, 392, 80), (288, 102, 410, 86), (276, 84, 428, 92),
+    (264, 70, 442, 98), (252, 62, 450, 104), (240, 58, 454, 108),
+    (228, 64, 448, 106), (216, 78, 434, 100), (204, 100, 412, 90),
+    (192, 132, 380, 76), (180, 172, 340, 60), (168, 216, 296, 46),
 )
 
 SCALE_ROWS = (
-    (187, 194, 318, 22, 5, 0),
-    (205, 154, 358, 22, 6, 1),
-    (223, 118, 394, 22, 6, 0),
-    (241, 88, 424, 22, 7, 1),
-    (259, 74, 438, 22, 8, 0),
-    (277, 82, 430, 22, 8, 1),
-    (295, 102, 410, 22, 7, 0),
-    (313, 130, 382, 22, 7, 1),
-    (331, 166, 346, 22, 6, 0),
-    (349, 202, 310, 22, 5, 1),
+    (187, 194, 318, 22, 5, 0), (205, 154, 358, 22, 6, 1),
+    (223, 118, 394, 22, 6, 0), (241, 88, 424, 22, 7, 1),
+    (259, 74, 438, 22, 8, 0), (277, 82, 430, 22, 8, 1),
+    (295, 102, 410, 22, 7, 0), (313, 130, 382, 22, 7, 1),
+    (331, 166, 346, 22, 6, 0), (349, 202, 310, 22, 5, 1),
 )
 
 TOP_EDGE = ((169, 181), (214, 161), (256, 156), (298, 161), (343, 181))
@@ -118,7 +100,6 @@ RIGHT_NOSTRIL = tuple((512 - x, y) for x, y in LEFT_NOSTRIL)
 MOUTH = ((190, 345), (225, 354), (256, 357), (287, 354), (322, 345))
 CHIN = ((222, 371), (256, 378), (290, 371))
 
-# Background paths combine smooth waves with angular nested repetitions.
 BG_PATHS = (
     ((8, 76), (72, 34), (136, 82), (200, 42), (264, 80), (328, 36), (392, 76), (504, 28)),
     ((5, 126), (70, 104), (135, 140), (205, 96), (276, 136), (350, 102), (505, 82)),
@@ -132,8 +113,6 @@ BG_PATHS = (
 
 
 def modular_tree() -> str:
-    # RCT 0 stores G, R-G, B-G. Negative chroma deltas therefore produce a
-    # saturated green field whose brightness changes from forehead to muzzle.
     return "\n".join([
         "if c > 1",
         "  if PrevAbs > 0",
@@ -148,10 +127,7 @@ def modular_tree() -> str:
 
 
 def program() -> str:
-    p = [
-        f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3", "RCT 0",
-        "Gaborish",
-    ]
+    p = [f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3", "RCT 0", "Gaborish"]
 
     bg_colours = (
         (0.04, 0.24, 0.34), (0.20, 0.05, 0.35), (0.02, 0.30, 0.18),
@@ -165,12 +141,10 @@ def program() -> str:
                                    15: (0.04, -0.03, 0.05)},
                         sigma_h={5: 0.04, 11: -0.025}))
 
-    # Fine contour strokes conceal the staircase edges of the Modular mask.
     p.append(spline((-0.36, -0.44, -0.22), 0.55, TOP_EDGE))
     p.append(spline((-0.36, -0.44, -0.22), 0.55, LEFT_EDGE))
     p.append(spline((-0.36, -0.44, -0.22), 0.55, RIGHT_EDGE))
 
-    # Interlocking V rows, alternating phase and hue.
     for i, (y, x0, x1, step, amp, phase) in enumerate(SCALE_ROWS):
         colour = (0.40, 0.68, 0.07) if i & 1 else (0.06, 0.46, 0.25)
         p.append(spline(colour, 0.24, scallops(y, x0, x1, step, amp, phase),
@@ -178,7 +152,6 @@ def program() -> str:
                                    10: (-0.035, -0.05, 0.014),
                                    20: (0.022, 0.032, -0.008)}))
 
-    # Almond eyes are made from two arcs each, then slit pupils and glints.
     for top, low in ((LEFT_EYE_TOP, LEFT_EYE_LOW), (RIGHT_EYE_TOP, RIGHT_EYE_LOW)):
         p.append(spline((-0.74, -0.82, -0.45), 1.45, top))
         p.append(spline((-0.74, -0.82, -0.45), 1.45, low))
