@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Design a tiny native JPEG XL artwork: a close-up snake head of scales.
-
-This does not rasterize an image. It emits a jxl_from_tree program whose
-zero-residual Modular frame and native JPEG XL splines generate the picture.
-"""
+"""Design a tiny native JPEG XL artwork: a close-up scaled snake head."""
 
 from pathlib import Path
 
@@ -27,10 +23,7 @@ def spline(rgb, sigma, pts, harmonics=None, sigma_h=None):
 
 
 def wave(y, x0, x1, step=18, amp=7, phase=0):
-    """A staggered scallop row; neighbouring rows interlock like scales."""
-    pts = []
-    x = x0
-    up = phase & 1
+    pts, x, up = [], x0, phase & 1
     while x <= x1:
         pts.append((x, y - amp if up else y + 1))
         x += step // 2
@@ -38,78 +31,69 @@ def wave(y, x0, x1, step=18, amp=7, phase=0):
     return tuple(pts)
 
 
-# Three broad, short strokes overlap into a single viper-like head. Their
-# different centerlines create a wedge rather than a body-shaped tube.
-TOP = ((118, 267), (182, 211), (278, 171), (376, 169), (463, 224))
-MID = ((105, 302), (199, 264), (315, 239), (423, 244), (492, 276))
-LOW = ((126, 341), (222, 344), (338, 329), (431, 310), (489, 286))
-
-# Rows are deliberately bounded to the head silhouette instead of being clipped
-# from a source image. Staggering and slightly changing their widths gives a
-# dense field of apparent scales from only a few spline declarations.
-SCALE_ROWS = (
-    (204, 190, 393, 0),
-    (224, 163, 432, 1),
-    (244, 143, 459, 0),
-    (264, 130, 478, 1),
-    (284, 126, 486, 0),
-    (304, 137, 475, 1),
-    (324, 158, 445, 0),
-    (344, 190, 405, 1),
+# Six narrow overlapping bands make a broad wedge-shaped viper head with much
+# less decoder coverage than three enormous Gaussian strokes.
+HEAD_ROWS = (
+    ((178, 216), (251, 181), (337, 174), (413, 202), (459, 235)),
+    ((145, 239), (235, 211), (338, 204), (430, 226), (482, 254)),
+    ((123, 264), (225, 241), (344, 235), (446, 251), (495, 272)),
+    ((117, 290), (229, 274), (350, 267), (451, 274), (496, 282)),
+    ((128, 316), (237, 310), (353, 301), (443, 292), (489, 286)),
+    ((157, 341), (249, 342), (350, 330), (427, 309), (476, 292)),
 )
 
-BROW = ((309, 218), (347, 204), (390, 207))
-EYE = ((344, 230), (366, 224), (388, 231))
-PUPIL = ((367, 220), (367, 238))
-MOUTH = ((251, 337), (340, 329), (424, 310), (487, 283))
-NOSTRIL = ((454, 264), (461, 262))
-CHEEK = ((203, 309), (277, 300), (346, 292))
+SCALE_ROWS = (
+    (214, 202, 399, 0),
+    (233, 171, 438, 1),
+    (252, 148, 467, 0),
+    (271, 134, 484, 1),
+    (290, 132, 486, 0),
+    (309, 148, 466, 1),
+    (328, 178, 430, 0),
+)
+
+BROW = ((307, 226), (349, 210), (395, 215))
+EYE = ((340, 239), (367, 230), (395, 240))
+PUPIL = ((368, 225), (368, 245))
+MOUTH = ((248, 329), (336, 322), (420, 305), (486, 282))
+NOSTRIL = ((454, 263), (462, 261))
+CHEEK = ((202, 302), (279, 294), (349, 287))
 
 
 def program() -> str:
     p = [f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3"]
 
-    # Dark silhouette first. Large Gaussian strokes overlap into a filled head.
-    for path, sigma in ((TOP, 9.0), (MID, 10.0), (LOW, 8.2)):
-        p.append(spline((-0.88, -0.93, -0.72), sigma, path,
-                        sigma_h={1: -0.9, 3: 0.25}))
+    for i, path in enumerate(HEAD_ROWS):
+        # Compact dark border and a colored inner band. Sigma stays low enough
+        # for conservative decoders while the overlapping rows still read solid.
+        p.append(spline((-0.78, -0.84, -0.62), 4.15, path,
+                        sigma_h={1: -0.32, 4: 0.10}))
+        base = ((0.08, 0.66, 0.13), (0.07, 0.82, 0.16),
+                (0.08, 0.94, 0.19), (0.07, 0.86, 0.16),
+                (0.06, 0.70, 0.12), (0.05, 0.54, 0.09))[i]
+        p.append(spline(base, 3.15, path,
+                        harmonics={3: (0.09, -0.13, 0.06),
+                                   8: (-0.06, 0.11, -0.04),
+                                   15: (0.04, -0.07, 0.03)},
+                        sigma_h={2: -0.20, 7: 0.07}))
 
-    # Iridescent fill: each layer has sparse DCT colour harmonics, so colour and
-    # thickness change along the head without per-pixel data.
-    p.append(spline((0.10, 0.72, 0.15), 7.0, TOP,
-                    harmonics={2: (0.10, 0.16, -0.02),
-                               7: (-0.08, 0.13, 0.05),
-                               13: (0.06, -0.10, 0.04)},
-                    sigma_h={1: -0.55, 5: 0.18}))
-    p.append(spline((0.08, 0.93, 0.18), 8.0, MID,
-                    harmonics={3: (0.12, -0.18, 0.08),
-                               9: (-0.09, 0.16, -0.06),
-                               17: (0.06, -0.11, 0.04)},
-                    sigma_h={2: -0.45, 8: 0.16}))
-    p.append(spline((0.06, 0.58, 0.10), 6.3, LOW,
-                    harmonics={4: (0.08, 0.12, 0.03),
-                               11: (-0.06, -0.09, 0.02)}))
-
-    # Interlocking scale rows. Every second row is staggered. Alternating lime
-    # and cool highlights make the pattern look denser than its encoded rules.
+    # Staggered scalloped rows imply dozens of overlapping scales.
     for i, (y, x0, x1, phase) in enumerate(SCALE_ROWS):
-        color = (0.32, 0.52, 0.06) if i & 1 else (0.12, 0.42, 0.20)
-        p.append(spline(color, 0.34, wave(y, x0, x1, phase=phase),
+        color = (0.34, 0.56, 0.07) if i & 1 else (0.12, 0.43, 0.20)
+        p.append(spline(color, 0.30, wave(y, x0, x1, phase=phase),
                         harmonics={6: (0.035, 0.05, 0.015),
                                    12: (-0.025, -0.035, 0.01)}))
 
-    # Face anatomy: brow ridge, eye with slit pupil, cheek, nostril and jaw.
-    p.append(spline((0.42, 0.70, 0.10), 1.15, BROW,
+    p.append(spline((0.44, 0.72, 0.10), 1.05, BROW,
                     harmonics={4: (0.10, 0.12, 0.02)}))
-    p.append(spline((-0.58, -0.65, -0.34), 2.35, EYE))
-    p.append(spline((1.25, 0.92, 0.08), 1.45, EYE))
-    p.append(spline((-1.05, -1.05, -0.72), 0.42, PUPIL))
-    p.append(spline((-0.34, -0.42, -0.20), 0.48, MOUTH))
-    p.append(spline((0.18, 0.30, 0.04), 0.35, CHEEK,
+    p.append(spline((-0.58, -0.65, -0.34), 2.10, EYE))
+    p.append(spline((1.25, 0.92, 0.08), 1.28, EYE))
+    p.append(spline((-1.05, -1.05, -0.72), 0.40, PUPIL))
+    p.append(spline((-0.34, -0.42, -0.20), 0.46, MOUTH))
+    p.append(spline((0.18, 0.30, 0.04), 0.32, CHEEK,
                     harmonics={5: (0.05, 0.07, 0.01)}))
-    p.append(spline((-0.92, -0.94, -0.72), 0.58, NOSTRIL))
+    p.append(spline((-0.92, -0.94, -0.72), 0.54, NOSTRIL))
 
-    # One zero-predictor leaf creates the black canvas. No raster source exists.
     return "\n".join(p) + "\n\n- Set 0\n"
 
 
