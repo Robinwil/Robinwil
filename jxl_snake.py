@@ -42,7 +42,6 @@ def leaf(value: int, indent: str = "") -> str:
 
 
 def x_range(x0: int, x1: int, value: int, indent: str) -> str:
-    """Return value only for x0 < x <= x1."""
     return "\n".join([
         f"{indent}if x > {x1}",
         leaf(0, indent + "  "),
@@ -53,7 +52,6 @@ def x_range(x0: int, x1: int, value: int, indent: str) -> str:
 
 
 def band_tree(bands, index=0, indent="") -> str:
-    """Build horizontal polygon slices, ordered from bottom to top."""
     if index == len(bands):
         return leaf(0, indent)
     y0, x0, x1, value = bands[index]
@@ -64,10 +62,9 @@ def band_tree(bands, index=0, indent="") -> str:
     ])
 
 
-# For each y threshold, define the horizontal extent and green-channel value.
-# The slices form a large asymmetric viper head with a tapered snout.
+# The first slice is intentionally empty: it cuts the head off below y=350.
 HEAD_BANDS = (
-    (350, 176, 430, 38),
+    (350, 0, 0, 0),
     (338, 154, 452, 42),
     (326, 137, 468, 46),
     (314, 124, 480, 50),
@@ -100,17 +97,16 @@ CHEEK = ((196, 307), (274, 299), (348, 291))
 
 
 def modular_tree() -> str:
-    # RCT 0 stores G, R-G and B-G. Channel zero builds the mask and brightness.
-    # Later channels inspect the previous channel's absolute value, so the head
-    # shape itself is encoded only once: inside it R=G-18 and B=G-27.
+    # RCT 0 behaves as R, G-R, B-R. The first channel carries the shape and red
+    # level; the next channels derive green and blue deltas from that same mask.
     return "\n".join([
         "if c > 1",
         "  if PrevAbs > 0",
-        leaf(-27, "    "),
+        leaf(-18, "    "),
         leaf(0, "    "),
         "  if c > 0",
         "    if PrevAbs > 0",
-        leaf(-18, "      "),
+        leaf(28, "      "),
         leaf(0, "      "),
         band_tree(HEAD_BANDS, indent="    "),
     ])
@@ -121,7 +117,6 @@ def program() -> str:
         f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3", "RCT 0"
     ]
 
-    # Thin contours and staggered scallops create the apparent surface detail.
     p.append(spline((-0.38, -0.46, -0.24), 0.70, TOP_EDGE))
     p.append(spline((-0.38, -0.46, -0.24), 0.70, LOW_EDGE))
     for i, (y, x0, x1, phase) in enumerate(SCALE_ROWS):
