@@ -1,0 +1,55 @@
+name: Build JXL snake artifact
+
+on:
+  push:
+    branches:
+      - tmp-jxl-snake-art
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install JPEG XL tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libjxl-devtools libjxl-tools
+
+      - name: Generate prediction-tree program
+        run: python3 jxl_snake.py
+
+      - name: Compile native JXL art
+        run: jxl_from_tree snake.tree snake.jxl snake-tree.svg
+
+      - name: Decode preview
+        run: djxl snake.jxl snake.png
+
+      - name: Record sizes and hashes
+        run: |
+          {
+            echo "JXL bytes: $(stat -c %s snake.jxl)"
+            echo "Tree source bytes: $(stat -c %s snake.tree)"
+            sha256sum snake.jxl snake.png snake.tree
+            jxlinfo snake.jxl || true
+          } | tee build-info.txt
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: jxl-snake-art
+          path: |
+            snake.jxl
+            snake.png
+            snake.tree
+            snake-tree.svg
+            jxl_snake.py
+            build-info.txt
+          if-no-files-found: error
+          retention-days: 1
