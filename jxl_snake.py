@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Design a tiny native JPEG XL artwork: a snake head with a coiled body.
+"""Design a tiny native JPEG XL artwork: a close-up snake head of scales.
 
 This does not rasterize an image. It emits a jxl_from_tree program whose
 zero-residual Modular frame and native JPEG XL splines generate the picture.
@@ -26,70 +26,90 @@ def spline(rgb, sigma, pts, harmonics=None, sigma_h=None):
     return f"Spline {coeff} {points} EndSpline"
 
 
-# The body leads the eye toward a large head at upper right.
-BODY = (
-    (52, 438), (104, 462), (164, 448), (206, 407), (216, 356),
-    (188, 318), (132, 300), (84, 270), (82, 222), (124, 188),
-    (184, 188), (238, 218), (286, 254), (338, 258), (379, 229),
-    (399, 188), (403, 151),
-)
-BODY_HI = tuple((x - 3, y - 3) for x, y in BODY)
+def wave(y, x0, x1, step=18, amp=7, phase=0):
+    """A staggered scallop row; neighbouring rows interlock like scales."""
+    pts = []
+    x = x0
+    up = phase & 1
+    while x <= x1:
+        pts.append((x, y - amp if up else y + 1))
+        x += step // 2
+        up ^= 1
+    return tuple(pts)
 
-# Shorter paths can use wider Gaussian splines without exceeding decoder limits.
-# Together these make a viper-like wedge, jaw and raised brow.
-HEAD_CORE = ((402, 153), (414, 126), (438, 104), (465, 91), (486, 94))
-HEAD_TOP = ((407, 146), (428, 112), (459, 91), (488, 94))
-HEAD_LOW = ((406, 154), (431, 145), (461, 130), (487, 101))
-BROW = ((438, 108), (456, 99), (474, 98))
-JAW = ((431, 137), (458, 132), (484, 108))
-EYE_GLOW = ((455, 105), (459, 104))
-EYE_PUPIL = ((458, 104), (461, 103))
-TONGUE_A = ((486, 99), (499, 91), (508, 79))
-TONGUE_B = ((486, 99), (500, 92), (510, 101))
+
+# Three broad, short strokes overlap into a single viper-like head. Their
+# different centerlines create a wedge rather than a body-shaped tube.
+TOP = ((118, 267), (182, 211), (278, 171), (376, 169), (463, 224))
+MID = ((105, 302), (199, 264), (315, 239), (423, 244), (492, 276))
+LOW = ((126, 341), (222, 344), (338, 329), (431, 310), (489, 286))
+
+# Rows are deliberately bounded to the head silhouette instead of being clipped
+# from a source image. Staggering and slightly changing their widths gives a
+# dense field of apparent scales from only a few spline declarations.
+SCALE_ROWS = (
+    (204, 190, 393, 0),
+    (224, 163, 432, 1),
+    (244, 143, 459, 0),
+    (264, 130, 478, 1),
+    (284, 126, 486, 0),
+    (304, 137, 475, 1),
+    (324, 158, 445, 0),
+    (344, 190, 405, 1),
+)
+
+BROW = ((309, 218), (347, 204), (390, 207))
+EYE = ((344, 230), (366, 224), (388, 231))
+PUPIL = ((367, 220), (367, 238))
+MOUTH = ((251, 337), (340, 329), (424, 310), (487, 283))
+NOSTRIL = ((454, 264), (461, 262))
+CHEEK = ((203, 309), (277, 300), (346, 292))
 
 
 def program() -> str:
-    p = [
-        f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3",
+    p = [f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3"]
 
-        # Coiled body: dark rim, green fill, then an oscillating highlight.
-        spline((-0.62, -0.70, -0.48), 2.0, BODY,
-               sigma_h={1: -0.24, 4: 0.10}),
-        spline((0.15, 0.92, 0.18), 1.35, BODY,
-               harmonics={3: (0.12, -0.19, 0.08),
-                          7: (-0.10, 0.17, -0.07),
-                          13: (0.07, -0.12, 0.05),
-                          21: (-0.05, 0.09, -0.04)},
-               sigma_h={2: -0.15, 9: 0.07}),
-        spline((0.30, 0.54, 0.06), 0.52, BODY_HI,
-               harmonics={6: (0.12, 0.15, 0.02),
-                          12: (-0.08, -0.11, 0.02),
-                          24: (0.05, 0.08, -0.02)}),
+    # Dark silhouette first. Large Gaussian strokes overlap into a filled head.
+    for path, sigma in ((TOP, 9.0), (MID, 10.0), (LOW, 8.2)):
+        p.append(spline((-0.88, -0.93, -0.72), sigma, path,
+                        sigma_h={1: -0.9, 3: 0.25}))
 
-        # Distinct head silhouette. The short under-stroke gives a broad wedge.
-        spline((-0.86, -0.90, -0.68), 6.2, HEAD_CORE,
-               sigma_h={1: -1.1, 2: 0.35}),
-        spline((0.18, 1.08, 0.22), 4.7, HEAD_CORE,
-               harmonics={2: (0.10, 0.18, -0.03),
-                          5: (0.16, -0.20, 0.08),
-                          9: (-0.10, 0.15, -0.06)},
-               sigma_h={1: -0.65, 4: 0.24}),
+    # Iridescent fill: each layer has sparse DCT colour harmonics, so colour and
+    # thickness change along the head without per-pixel data.
+    p.append(spline((0.10, 0.72, 0.15), 7.0, TOP,
+                    harmonics={2: (0.10, 0.16, -0.02),
+                               7: (-0.08, 0.13, 0.05),
+                               13: (0.06, -0.10, 0.04)},
+                    sigma_h={1: -0.55, 5: 0.18}))
+    p.append(spline((0.08, 0.93, 0.18), 8.0, MID,
+                    harmonics={3: (0.12, -0.18, 0.08),
+                               9: (-0.09, 0.16, -0.06),
+                               17: (0.06, -0.11, 0.04)},
+                    sigma_h={2: -0.45, 8: 0.16}))
+    p.append(spline((0.06, 0.58, 0.10), 6.3, LOW,
+                    harmonics={4: (0.08, 0.12, 0.03),
+                               11: (-0.06, -0.09, 0.02)}))
 
-        # Upper skull and lower cheek create a triangular/viper profile.
-        spline((0.26, 0.72, 0.08), 2.2, HEAD_TOP,
-               harmonics={4: (0.11, 0.14, 0.02)}),
-        spline((0.10, 0.48, 0.05), 2.0, HEAD_LOW),
-        spline((0.46, 0.72, 0.10), 1.0, BROW),
+    # Interlocking scale rows. Every second row is staggered. Alternating lime
+    # and cool highlights make the pattern look denser than its encoded rules.
+    for i, (y, x0, x1, phase) in enumerate(SCALE_ROWS):
+        color = (0.32, 0.52, 0.06) if i & 1 else (0.12, 0.42, 0.20)
+        p.append(spline(color, 0.34, wave(y, x0, x1, phase=phase),
+                        harmonics={6: (0.035, 0.05, 0.015),
+                                   12: (-0.025, -0.035, 0.01)}))
 
-        # Face cues: jaw, bright eye, dark slit pupil, forked tongue.
-        spline((-0.32, -0.38, -0.20), 0.42, JAW),
-        spline((1.20, 0.95, 0.12), 0.75, EYE_GLOW),
-        spline((-0.95, -0.95, -0.70), 0.24, EYE_PUPIL),
-        spline((1.10, 0.03, 0.02), 0.28, TONGUE_A),
-        spline((1.10, 0.03, 0.02), 0.28, TONGUE_B),
-    ]
+    # Face anatomy: brow ridge, eye with slit pupil, cheek, nostril and jaw.
+    p.append(spline((0.42, 0.70, 0.10), 1.15, BROW,
+                    harmonics={4: (0.10, 0.12, 0.02)}))
+    p.append(spline((-0.58, -0.65, -0.34), 2.35, EYE))
+    p.append(spline((1.25, 0.92, 0.08), 1.45, EYE))
+    p.append(spline((-1.05, -1.05, -0.72), 0.42, PUPIL))
+    p.append(spline((-0.34, -0.42, -0.20), 0.48, MOUTH))
+    p.append(spline((0.18, 0.30, 0.04), 0.35, CHEEK,
+                    harmonics={5: (0.05, 0.07, 0.01)}))
+    p.append(spline((-0.92, -0.94, -0.72), 0.58, NOSTRIL))
 
-    # A single zero-predictor leaf makes the canvas. No source pixels exist.
+    # One zero-predictor leaf creates the black canvas. No raster source exists.
     return "\n".join(p) + "\n\n- Set 0\n"
 
 
