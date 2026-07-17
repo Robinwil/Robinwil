@@ -50,6 +50,19 @@ jobs:
             jxlinfo snake.jxl || true
           } | tee build-info.txt
 
+      - name: Bundle local JXL toolchain
+        shell: bash
+        run: |
+          mkdir -p jxl-toolchain/bin jxl-toolchain/lib
+          cp "$(command -v jxl_from_tree)" "$(command -v djxl)" "$(command -v jxlinfo)" jxl-toolchain/bin/
+          ldd "$(command -v jxl_from_tree)" "$(command -v djxl)" "$(command -v jxlinfo)" \
+            | awk '{if ($3 ~ /^\//) print $3; else if ($1 ~ /^\//) print $1}' \
+            | sort -u \
+            | while read -r lib; do cp -L "$lib" jxl-toolchain/lib/; done
+          printf '#!/bin/sh\nHERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nexport LD_LIBRARY_PATH="$HERE/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\nexec "$HERE/bin/$1" "${@:2}"\n' > jxl-toolchain/run.sh
+          chmod +x jxl-toolchain/run.sh
+          ldd jxl-toolchain/bin/jxl_from_tree > jxl-toolchain/ldd.txt
+
       - name: Upload result
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,5 +76,6 @@ jobs:
             build-info.txt
             compile.log
             decode.log
+            jxl-toolchain
           if-no-files-found: warn
           retention-days: 1
