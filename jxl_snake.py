@@ -55,9 +55,12 @@ def band_tree(bands, index=0, indent="") -> str:
     if index == len(bands):
         return leaf(0, indent)
     y0, x0, x1, value = bands[index]
+    true_branch = leaf(0, indent + "  ") if value == 0 else x_range(
+        x0, x1, value, indent + "  "
+    )
     return "\n".join([
         f"{indent}if y > {y0}",
-        x_range(x0, x1, value, indent + "  "),
+        true_branch,
         band_tree(bands, index + 1, indent + "  "),
     ])
 
@@ -97,8 +100,6 @@ CHEEK = ((196, 307), (274, 299), (348, 291))
 
 
 def modular_tree() -> str:
-    # RCT 0 behaves as R, G-R, B-R. The first channel carries the shape and red
-    # level; the next channels derive green and blue deltas from that same mask.
     return "\n".join([
         "if c > 1",
         "  if PrevAbs > 0",
