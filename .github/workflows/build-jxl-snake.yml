@@ -31,32 +31,23 @@ jobs:
       - name: Compile native JXL art
         shell: bash
         run: |
-          set +e
-          jxl_from_tree snake.tree snake.jxl snake-tree.txt >compile.log 2>&1
-          status=$?
-          echo "$status" >compile-status.txt
-          cat compile.log
-          echo "compiler exit: $status"
-          exit 0
+          set -o pipefail
+          jxl_from_tree snake.tree snake.jxl 2>&1 | tee compile.log
 
       - name: Decode preview
         shell: bash
         run: |
-          if [[ -f snake.jxl ]]; then
-            djxl snake.jxl snake.png >decode.log 2>&1 || true
-            cat decode.log
-          else
-            echo "No snake.jxl was produced" | tee decode.log
-          fi
+          set -o pipefail
+          djxl snake.jxl snake.png 2>&1 | tee decode.log
 
       - name: Record sizes and hashes
         shell: bash
         run: |
           {
-            [[ -f snake.jxl ]] && echo "JXL bytes: $(stat -c %s snake.jxl)"
+            echo "JXL bytes: $(stat -c %s snake.jxl)"
             echo "Tree source bytes: $(stat -c %s snake.tree)"
-            sha256sum snake.jxl snake.png snake.tree 2>/dev/null || true
-            [[ -f snake.jxl ]] && jxlinfo snake.jxl || true
+            sha256sum snake.jxl snake.png snake.tree
+            jxlinfo snake.jxl || true
           } | tee build-info.txt
 
       - name: Upload result
@@ -68,11 +59,9 @@ jobs:
             snake.jxl
             snake.png
             snake.tree
-            snake-tree.txt
             jxl_snake.py
             build-info.txt
             compile.log
-            compile-status.txt
             decode.log
           if-no-files-found: warn
           retention-days: 1
