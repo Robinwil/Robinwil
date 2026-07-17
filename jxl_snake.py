@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Design a tiny native JPEG XL artwork: a close-up scaled snake head."""
+"""Design a tiny native JPEG XL artwork: a close-up scaled snake head.
+
+The head silhouette and fill are produced by the zero-residual Modular tree.
+Native JPEG XL splines are used only for the visible scales and facial details.
+"""
 
 from pathlib import Path
 
@@ -31,72 +35,115 @@ def wave(y, x0, x1, step=18, amp=7, phase=0):
     return tuple(pts)
 
 
-HEAD_ROWS = (
-    ((178, 216), (251, 181), (337, 174), (413, 202), (459, 235)),
-    ((145, 239), (235, 211), (338, 204), (430, 226), (482, 254)),
-    ((123, 264), (225, 241), (344, 235), (446, 251), (495, 272)),
-    ((117, 290), (229, 274), (350, 267), (451, 274), (496, 282)),
-    ((128, 316), (237, 310), (353, 301), (443, 292), (489, 286)),
-    ((157, 341), (249, 342), (350, 330), (427, 309), (476, 292)),
-)
-BASES = (
-    (0.08, 0.63, 0.12), (0.07, 0.78, 0.15), (0.08, 0.92, 0.18),
-    (0.07, 0.84, 0.15), (0.06, 0.68, 0.11), (0.05, 0.52, 0.08),
+def leaf(value: int, indent: str = "") -> str:
+    if value < 0:
+        return f"{indent}- Set - {abs(value)}"
+    return f"{indent}- Set {value}"
+
+
+def x_range(x0: int, x1: int, value: int, indent: str) -> str:
+    """Return value only for x0 < x <= x1."""
+    return "\n".join([
+        f"{indent}if x > {x1}",
+        leaf(0, indent + "  "),
+        f"{indent}  if x > {x0}",
+        leaf(value, indent + "    "),
+        leaf(0, indent + "    "),
+    ])
+
+
+def band_tree(bands, index=0, indent="") -> str:
+    """Build horizontal polygon slices, ordered from bottom to top."""
+    if index == len(bands):
+        return leaf(0, indent)
+    y0, x0, x1, value = bands[index]
+    return "\n".join([
+        f"{indent}if y > {y0}",
+        x_range(x0, x1, value, indent + "  "),
+        band_tree(bands, index + 1, indent + "  "),
+    ])
+
+
+# For each y threshold, define the horizontal extent and green-channel value.
+# The slices form a large asymmetric viper head with a tapered snout.
+HEAD_BANDS = (
+    (350, 176, 430, 38),
+    (338, 154, 452, 42),
+    (326, 137, 468, 46),
+    (314, 124, 480, 50),
+    (302, 116, 489, 54),
+    (290, 111, 496, 58),
+    (278, 109, 499, 62),
+    (266, 112, 496, 66),
+    (254, 120, 488, 68),
+    (242, 134, 475, 66),
+    (230, 151, 456, 62),
+    (218, 174, 432, 56),
+    (206, 205, 401, 48),
+    (194, 242, 365, 40),
 )
 
 SCALE_ROWS = (
-    (214, 202, 399, 0), (233, 171, 438, 1), (252, 148, 467, 0),
-    (271, 134, 484, 1), (290, 132, 486, 0), (309, 148, 466, 1),
-    (328, 178, 430, 0),
+    (214, 205, 390, 0), (233, 174, 431, 1), (252, 148, 464, 0),
+    (271, 132, 484, 1), (290, 130, 486, 0), (309, 145, 466, 1),
+    (328, 173, 434, 0), (347, 205, 395, 1),
 )
 
-TOP_EDGE = ((173, 207), (249, 169), (338, 161), (419, 192), (468, 231))
-LOW_EDGE = ((151, 350), (248, 352), (354, 338), (433, 315), (485, 291))
-BROW = ((307, 226), (349, 210), (395, 215))
-EYE = ((340, 239), (367, 230), (395, 240))
-PUPIL = ((368, 225), (368, 245))
-MOUTH = ((248, 329), (336, 322), (420, 305), (486, 282))
-NOSTRIL = ((454, 263), (462, 261))
-CHEEK = ((202, 302), (279, 294), (349, 287))
+TOP_EDGE = ((192, 213), (246, 188), (315, 178), (381, 190), (446, 229))
+LOW_EDGE = ((171, 353), (252, 359), (342, 347), (421, 322), (486, 288))
+BROW = ((303, 231), (346, 213), (397, 218))
+EYE = ((337, 244), (367, 233), (399, 244))
+PUPIL = ((368, 227), (368, 249))
+MOUTH = ((243, 337), (333, 328), (420, 308), (490, 282))
+NOSTRIL = ((455, 263), (464, 261))
+CHEEK = ((196, 307), (274, 299), (348, 291))
+
+
+def modular_tree() -> str:
+    # RCT 0 stores G, R-G and B-G. Channel zero builds the mask and brightness.
+    # Later channels inspect the previous channel's absolute value, so the head
+    # shape itself is encoded only once: inside it R=G-18 and B=G-27.
+    return "\n".join([
+        "if c > 1",
+        "  if PrevAbs > 0",
+        leaf(-27, "    "),
+        leaf(0, "    "),
+        "  if c > 0",
+        "    if PrevAbs > 0",
+        leaf(-18, "      "),
+        leaf(0, "      "),
+        band_tree(HEAD_BANDS, indent="    "),
+    ])
 
 
 def program() -> str:
-    p = [f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3"]
+    p = [
+        f"Width {W}", f"Height {H}", "Bitdepth 8", "GroupShift 3", "RCT 0"
+    ]
 
-    # Only the coloured bands fill the head. Removing duplicate broad shadow
-    # bands cuts decoder work drastically while overlap still gives one shape.
-    for i, path in enumerate(HEAD_ROWS):
-        p.append(spline(BASES[i], 3.7, path,
-                        harmonics={3: (0.09, -0.13, 0.06),
-                                   8: (-0.06, 0.11, -0.04),
-                                   15: (0.04, -0.07, 0.03)},
-                        sigma_h={2: -0.22, 7: 0.08}))
-
-    # Cheap thin contours define the wedge against the black canvas.
-    p.append(spline((-0.42, -0.50, -0.27), 0.72, TOP_EDGE))
-    p.append(spline((-0.42, -0.50, -0.27), 0.72, LOW_EDGE))
-
-    # Staggered scalloped rows imply dozens of interlocking scales.
+    # Thin contours and staggered scallops create the apparent surface detail.
+    p.append(spline((-0.38, -0.46, -0.24), 0.70, TOP_EDGE))
+    p.append(spline((-0.38, -0.46, -0.24), 0.70, LOW_EDGE))
     for i, (y, x0, x1, phase) in enumerate(SCALE_ROWS):
-        color = (0.36, 0.58, 0.07) if i & 1 else (0.12, 0.45, 0.20)
+        color = (0.38, 0.62, 0.07) if i & 1 else (0.12, 0.46, 0.21)
         p.append(spline(color, 0.30, wave(y, x0, x1, phase=phase),
                         harmonics={6: (0.035, 0.05, 0.015),
                                    12: (-0.025, -0.035, 0.01)}))
 
-    p.append(spline((0.46, 0.74, 0.10), 1.05, BROW,
+    p.append(spline((0.48, 0.77, 0.10), 1.05, BROW,
                     harmonics={4: (0.10, 0.12, 0.02)}))
-    p.append(spline((-0.58, -0.65, -0.34), 2.10, EYE))
-    p.append(spline((1.25, 0.92, 0.08), 1.28, EYE))
-    p.append(spline((-1.05, -1.05, -0.72), 0.40, PUPIL))
-    p.append(spline((-0.34, -0.42, -0.20), 0.46, MOUTH))
-    p.append(spline((0.18, 0.30, 0.04), 0.32, CHEEK,
+    p.append(spline((-0.62, -0.69, -0.37), 2.10, EYE))
+    p.append(spline((1.28, 0.94, 0.08), 1.28, EYE))
+    p.append(spline((-1.08, -1.08, -0.75), 0.40, PUPIL))
+    p.append(spline((-0.36, -0.44, -0.21), 0.46, MOUTH))
+    p.append(spline((0.18, 0.31, 0.04), 0.32, CHEEK,
                     harmonics={5: (0.05, 0.07, 0.01)}))
-    p.append(spline((-0.92, -0.94, -0.72), 0.54, NOSTRIL))
+    p.append(spline((-0.94, -0.96, -0.74), 0.54, NOSTRIL))
 
-    return "\n".join(p) + "\n\n- Set 0\n"
+    return "\n".join(p) + "\n\n" + modular_tree() + "\n"
 
 
 if __name__ == "__main__":
-    s = program()
-    Path("snake.tree").write_text(s)
-    print(f"wrote snake.tree ({len(s.encode())} source bytes)")
+    source = program()
+    Path("snake.tree").write_text(source)
+    print(f"wrote snake.tree ({len(source.encode())} source bytes)")
