@@ -10,7 +10,7 @@ The Python does not rasterize the artwork. It emits a jxl_from_tree program:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 SIZE = 512
 
@@ -77,8 +77,7 @@ BODY: tuple[tuple[float, float], ...] = (
     (455, 60),
 )
 
-# A near-identical inner path gives a crisp illuminated spine inside the broad
-# body without storing any pixels.
+# A near-identical inner path gives a crisp illuminated spine inside the body.
 INNER: tuple[tuple[float, float], ...] = tuple((x - 2, y - 3) for x, y in BODY)
 
 # A forked tongue: two tiny red splines share the root and diverge at the tip.
@@ -92,48 +91,48 @@ def build_program() -> str:
         f"Height {SIZE}",
         "Bitdepth 8",
         "GroupShift 3",
-        # Broad dark rim. Negative spline colours subtract from the procedural
-        # background and make the silhouette remain legible across bright areas.
+        # The spline sigma values are deliberately small. JPEG XL splines are
+        # Gaussian strokes; a large sigma covers an enormous decoder area.
         spline(
-            (-0.42, -0.48, -0.34),
-            24,
+            (-0.72, -0.78, -0.55),
+            2.0,
             BODY,
-            radius_harmonics={1: -7.5, 2: 2.5, 9: 1.8},
+            radius_harmonics={1: -0.30, 2: 0.16, 9: 0.10},
         ),
-        # Main body. Sparse colour DCT coefficients generate scales/bands along
-        # the complete snake at decoder time.
+        # Sparse colour DCT coefficients generate scales/bands all along the
+        # snake without storing one value per band or per pixel.
         spline(
-            (0.12, 0.78, 0.18),
-            17,
+            (0.20, 1.00, 0.25),
+            1.40,
             BODY,
             rgb_harmonics={
-                1: (0.04, 0.10, -0.02),
-                5: (0.11, -0.16, 0.07),
-                10: (-0.08, 0.12, -0.05),
-                15: (0.05, -0.08, 0.04),
+                1: (0.08, 0.16, -0.03),
+                5: (0.18, -0.28, 0.12),
+                10: (-0.13, 0.21, -0.09),
+                15: (0.09, -0.14, 0.07),
             },
-            radius_harmonics={1: -5.5, 3: 1.8, 11: 1.1},
+            radius_harmonics={1: -0.22, 3: 0.13, 11: 0.08},
         ),
-        # Thin golden-green highlight, itself modulated into repeating scales.
+        # Thin golden-green highlight, independently banded at higher frequency.
         spline(
-            (0.18, 0.32, 0.035),
-            5.2,
+            (0.34, 0.58, 0.07),
+            0.55,
             INNER,
             rgb_harmonics={
-                4: (0.07, 0.10, 0.015),
-                8: (-0.05, -0.08, 0.01),
-                16: (0.035, 0.06, -0.015),
+                4: (0.13, 0.18, 0.03),
+                8: (-0.09, -0.14, 0.02),
+                16: (0.06, 0.10, -0.03),
             },
-            radius_harmonics={7: 1.1, 14: -0.7},
+            radius_harmonics={7: 0.10, 14: -0.06},
         ),
-        spline((0.92, 0.035, 0.02), 1.8, TONGUE_A),
-        spline((0.92, 0.035, 0.02), 1.8, TONGUE_B),
+        spline((1.0, 0.035, 0.02), 0.24, TONGUE_A),
+        spline((1.0, 0.035, 0.02), 0.24, TONGUE_B),
     ]
 
     # The residual stream is forced to all zeroes by jxl_from_tree. This tiny
-    # tree therefore *is* the background program. The three channels use
-    # different self-feeding predictors. Their wraparound, gradients and
-    # predictor-error feedback create a dense iridescent field from a few nodes.
+    # tree therefore *is* the background program. The channels use different
+    # self-feeding predictors; wraparound and predictor-error feedback create a
+    # dense iridescent field from only a handful of decision nodes.
     tree = """
 if c > 1
   if y > 0
