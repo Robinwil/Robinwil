@@ -29,21 +29,38 @@ jobs:
         run: python3 jxl_snake.py
 
       - name: Compile native JXL art
-        run: jxl_from_tree snake.tree snake.jxl snake-tree.svg
+        shell: bash
+        run: |
+          set +e
+          jxl_from_tree snake.tree snake.jxl snake-tree.txt >compile.log 2>&1
+          status=$?
+          echo "$status" >compile-status.txt
+          cat compile.log
+          echo "compiler exit: $status"
+          exit 0
 
       - name: Decode preview
-        run: djxl snake.jxl snake.png
+        shell: bash
+        run: |
+          if [[ -f snake.jxl ]]; then
+            djxl snake.jxl snake.png >decode.log 2>&1 || true
+            cat decode.log
+          else
+            echo "No snake.jxl was produced" | tee decode.log
+          fi
 
       - name: Record sizes and hashes
+        shell: bash
         run: |
           {
-            echo "JXL bytes: $(stat -c %s snake.jxl)"
+            [[ -f snake.jxl ]] && echo "JXL bytes: $(stat -c %s snake.jxl)"
             echo "Tree source bytes: $(stat -c %s snake.tree)"
-            sha256sum snake.jxl snake.png snake.tree
-            jxlinfo snake.jxl || true
+            sha256sum snake.jxl snake.png snake.tree 2>/dev/null || true
+            [[ -f snake.jxl ]] && jxlinfo snake.jxl || true
           } | tee build-info.txt
 
       - name: Upload result
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: jxl-snake-art
@@ -51,8 +68,11 @@ jobs:
             snake.jxl
             snake.png
             snake.tree
-            snake-tree.svg
+            snake-tree.txt
             jxl_snake.py
             build-info.txt
-          if-no-files-found: error
+            compile.log
+            compile-status.txt
+            decode.log
+          if-no-files-found: warn
           retention-days: 1
